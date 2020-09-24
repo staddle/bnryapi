@@ -1,3 +1,6 @@
+//import roles from './roles.js';
+
+var roles = require('./roles.js');
 var express = require('express');
 var app = express();
 var bodyParser = require('body-parser');
@@ -63,11 +66,10 @@ app.get('/createparty', function(req, res){
     var partycode = randomString(5, '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
     dbConn.query('INSERT INTO party(code) VALUES(?);', partycode, function (error, results, fields){
         if (error) throw error;
-        console.log('GET: /party/create | New Party: ' + partycode);
+        console.log('GET: /createparty | New Party: ' + partycode);
     });
     dbConn.query('SELECT * FROM party WHERE code=?;', partycode, function (error, results, fields){
         if (error) throw error;
-        console.log('GET: /party/create | New Party: ' + partycode);
         return res.send({ error: false, data: results[0], message: 'Party created successfully.' });
     });
 });
@@ -86,12 +88,39 @@ app.get('/party/delete/:code', function(req, res){
     });
 });
 
+app.get('/party/:code/nextround', function(req, res){
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "X-Requested-With");
+    let code = req.params.code;
+    if (!code) {
+        return res.status(400).send({ error: true, message: 'Please provide a party code' });
+    }
+    console.log('GET: /party/'+code+'/nextround');
+    //CHECK IF PROVIDED KEY MATCHES & generate next round
+    var cur = 0;
+    dbConn.query('SELECT cur FROM party WHERE code=?;', code, function (error, results, fields){
+        if (error) throw error;
+        cur = results[0].cur;
+        console.log(cur);
+        console.log('cur is '+cur);
+        var round = parseInt(getCurSlice(cur, 0, 3));
+        round = (round+1)%8;
+        console.log('new round is '+round)
+        var newcur = insertCurSlice(cur, round, 0, 3);
+        console.log('new cur is '+newcur);
+        dbConn.query('UPDATE party SET cur = ? WHERE code = ?;', [newcur, code], function (error, results, fields){
+            if (error) throw error;
+            return res.send({ error: false, data: results, message: 'Party has been updated successfully.' });
+        });
+    });
+    
+});
+
 function randomString (length, chars) {
     var result = '';
     for (var i = length; i > 0; --i) result += chars[Math.floor(Math.random() * chars.length)];
     return result;
 };
-
 
 //====BLOG====
 //id|title|desc|text|date|author|latest
@@ -166,6 +195,32 @@ app.delete('/blog/:id', function(req, res){
 });
 
 //====FINISH====
+function randomRole () {
+    var rand = Math.floor(Math.random() * roles.length);
+    return roles[rand];
+}
+
+function getCurSlice(cur, start, length) {
+    var bincur = fillUp(parseInt(cur, 10).toString(2), 26);
+    var slice = bincur.substring(start, start+length);
+    return parseInt(slice, 2).toString(10);
+}
+
+function insertCurSlice(cur, insert, start, length) { //0, 1, 0, 3
+    var bincur = fillUp(parseInt(cur, 10).toString(2), 26); //
+    console.log(bincur)
+    var bininsert = fillUp(parseInt(insert, 10).toString(2), length);
+    console.log(bininsert)
+    var newbincur = bincur.substring(0,start) + bininsert + bincur.substring(start+length);
+    return parseInt(newbincur, 2).toString(10);
+}
+
+function fillUp(cur, digits){
+    if(cur.length<digits){
+        return '0'.repeat(digits-cur.length)+cur;
+    }
+    return cur;
+}
 // set port
 app.listen(3000, function () {
     console.log('Node app is running on port 3000');
